@@ -6,6 +6,8 @@ from ast import literal_eval
 import os
 import json
 import ast
+from dotenv import load_dotenv
+import psycopg2
 
 router = APIRouter()
 
@@ -16,12 +18,12 @@ async def getdata():
     '''
 
     # Path to dataset used in our endpoint
-    locs_path = os.path.join(os.path.dirname(
-        __file__), 'all_sources_geoed_labelled.csv')
+    # locs_path = os.path.join(os.path.dirname(
+    #     __file__), 'all_sources_geoed_labelled.csv')
 
     router = APIRouter()
 
-    df = pd.read_csv(locs_path)
+    # df = pd.read_csv(locs_path)
     # Fix issue where "Unnamed: 0" created when reading in the dataframe
     #df = df.drop(columns="Unnamed: 0")
 
@@ -31,6 +33,34 @@ async def getdata():
     #    df['tags'][i] = ast.literal_eval(df['tags'][i])
     #all bad
 
+    load_dotenv()
+    user = os.getenv('user')
+    password = os.getenv('password')
+    port = os.getenv('port')
+    database = os.getenv('database')
+    host = os.getenv('host')
+
+    try:
+        #function for establishing connection
+        connection = psycopg2.connect(user= user,
+                                            password= password, 
+                                            host= host,
+                                            port = port,  
+                                            database = database)
+        #print POSTGRES Conn properties
+        print(connection.get_dsn_parameters(), "\n")
+
+    except Exception as ex:
+            print("connection error: ")
+            print (ex)
+
+    sql="""
+    SELECT *
+    FROM latest_2020PB
+    ORDER BY ind
+    """
+
+    master_table = pd.read_sql(sql, index_col = 'ind', con=connection)
 
     """
     Convert data to useable json format
@@ -38,7 +68,8 @@ async def getdata():
     dateframe: JSON object
     """
     # Initial conversion to json - use records to jsonify by instances (rows)
-    result = df.to_json(orient="records")
+    result = master_table.to_json(orient="records")
     # Parse the jsonified data removing instances of '\"' making it difficult for backend to collect the data
     parsed = json.loads(result.replace('\"', '"'))
+    
     return parsed
