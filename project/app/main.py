@@ -77,176 +77,176 @@ app.include_router(predict.router)  # Not used by labs 27 but left in for future
 # app.include_router(viz.router)  # Not used by labs 27 but left in for future reference/use
 app.include_router(getdata.router)
 
-# The following is run upon app startup
-"""This was not thoroughly explored or used by labs 27 as our focus was on getting accurate data cleaned,
-explored, and sent to web. Created by labs 25, it seems to be their method of collecting new data from Reddit,
-cleaning the data and performing some feature engineering before saving it to the backlog.csv file. We ran this a
-couple of times and couldn't seem to get more than 1 new instance pulled. Maybe something that can be worked on 
-by future labs teams."""
-@app.on_event('startup')
-@repeat_every(seconds=60*60*24)  # 24 hours
-def run_update() -> None:
-    '''
-    Update backlog database with data from reddit.
-    '''
+# # The following is run upon app startup
+# """This was not thoroughly explored or used by labs 27 as our focus was on getting accurate data cleaned,
+# explored, and sent to web. Created by labs 25, it seems to be their method of collecting new data from Reddit,
+# cleaning the data and performing some feature engineering before saving it to the backlog.csv file. We ran this a
+# couple of times and couldn't seem to get more than 1 new instance pulled. Maybe something that can be worked on 
+# by future labs teams."""
+# @app.on_event('startup')
+# @repeat_every(seconds=60*60*24)  # 24 hours
+# def run_update() -> None:
+#     '''
+#     Update backlog database with data from reddit.
+#     '''
 
-    # globalize these variables because I need to
-    PRAW_CLIENT_ID = os.getenv('PRAW_CLIENT_ID')
-    PRAW_CLIENT_SECRET = os.getenv('PRAW_CLIENT_SECRET')
-    PRAW_USER_AGENT =  os.getenv('PRAW_USER_AGENT')
+#     # globalize these variables because I need to
+#     PRAW_CLIENT_ID = os.getenv('PRAW_CLIENT_ID')
+#     PRAW_CLIENT_SECRET = os.getenv('PRAW_CLIENT_SECRET')
+#     PRAW_USER_AGENT =  os.getenv('PRAW_USER_AGENT')
 
-    reddit = praw.Reddit(
-        client_id=PRAW_CLIENT_ID,
-        client_secret=PRAW_CLIENT_SECRET,
-        user_agent=PRAW_USER_AGENT
-    )
-    # Grab data from reddit
-    data = []
-    # Pull from reddit using the format: reddit.subreddit(<subreddit name>).<sort posts by keyword>(limit=<number of posts that you want to pull>)
-    for submission in reddit.subreddit("news").hot(limit=100):
-        data.append([submission.id, submission.title, submission.url])
-    # construct a dataframe with the data
-    col_names = ['id', 'title', 'url']
-    df = pd.DataFrame(data, columns=col_names)
+#     reddit = praw.Reddit(
+#         client_id=PRAW_CLIENT_ID,
+#         client_secret=PRAW_CLIENT_SECRET,
+#         user_agent=PRAW_USER_AGENT
+#     )
+#     # Grab data from reddit
+#     data = []
+#     # Pull from reddit using the format: reddit.subreddit(<subreddit name>).<sort posts by keyword>(limit=<number of posts that you want to pull>)
+#     for submission in reddit.subreddit("news").hot(limit=100):
+#         data.append([submission.id, submission.title, submission.url])
+#     # construct a dataframe with the data
+#     col_names = ['id', 'title', 'url']
+#     df = pd.DataFrame(data, columns=col_names)
 
-    # pull the text from each article itself using newspaper3k
-    content_list = []
-    date_list = []
-    # go through each URL and use newspaper3k to extract data
-    for id_url in df['url']:
-        # use newspaper3k to extract text
-        article = Article(id_url)
-        article.download()
-        # if the article doesn't download, the error is thrown in parse()
-        try:
-            article.parse()
-        except:
-            # add null values to show no connection
-            content_list.append(None)
-            date_list.append(None)
-            continue
-        content_list.append(article.text)
-        # this will be null if newspaper3k can't find it
-        date_list.append(article.publish_date)
-    df['text'] = content_list
-    df['date'] = date_list
+#     # pull the text from each article itself using newspaper3k
+#     content_list = []
+#     date_list = []
+#     # go through each URL and use newspaper3k to extract data
+#     for id_url in df['url']:
+#         # use newspaper3k to extract text
+#         article = Article(id_url)
+#         article.download()
+#         # if the article doesn't download, the error is thrown in parse()
+#         try:
+#             article.parse()
+#         except:
+#             # add null values to show no connection
+#             content_list.append(None)
+#             date_list.append(None)
+#             continue
+#         content_list.append(article.text)
+#         # this will be null if newspaper3k can't find it
+#         date_list.append(article.publish_date)
+#     df['text'] = content_list
+#     df['date'] = date_list
 
-    # use NLP model to filter posts
-    df['is_police_brutality'] = pipeline.predict(df['title'])
-    df = df[df['is_police_brutality'] == 1]
-    df = df.drop(columns='is_police_brutality')
+#     # use NLP model to filter posts
+#     df['is_police_brutality'] = pipeline.predict(df['title'])
+#     df = df[df['is_police_brutality'] == 1]
+#     df = df.drop(columns='is_police_brutality')
 
-    # use spaCy to extract location tokens
-    tokens_list = []
-    for text in df['text']:
-        doc = nlp(text.lower())
-        ents = [e.text for e in doc.ents if e.label_ == 'GPE']
-        tokens_list.append(ents)
-    df['tokens'] = tokens_list
+#     # use spaCy to extract location tokens
+#     tokens_list = []
+#     for text in df['text']:
+#         doc = nlp(text.lower())
+#         ents = [e.text for e in doc.ents if e.label_ == 'GPE']
+#         tokens_list.append(ents)
+#     df['tokens'] = tokens_list
 
-    # figure out which city and state the article takes place in
-    city_list = []
-    state_list = []
-    lat_list = []
-    long_list = []
-    for tokens in df['tokens']:
-        # set up Counter
-        c = Counter(tokens)
+#     # figure out which city and state the article takes place in
+#     city_list = []
+#     state_list = []
+#     lat_list = []
+#     long_list = []
+#     for tokens in df['tokens']:
+#         # set up Counter
+#         c = Counter(tokens)
 
-        # count which states come back the most, if any
-        state_counts = {}
-        for state in states_map:
-            if c[state] > 0:
-                state_counts[state] = c[state]
+#         # count which states come back the most, if any
+#         state_counts = {}
+#         for state in states_map:
+#             if c[state] > 0:
+#                 state_counts[state] = c[state]
 
-        # get state(s) that came back the most as dict with lists
-        max_count = 0
-        max_state = None
+#         # get state(s) that came back the most as dict with lists
+#         max_count = 0
+#         max_state = None
 
-        for state in state_counts:
-            if state_counts[state] > max_count:
-                max_count = state_counts[state]
-                max_state = {state: {}}
-            elif state_counts[state] == max_count:
-                max_state[state] = {}
+#         for state in state_counts:
+#             if state_counts[state] > max_count:
+#                 max_count = state_counts[state]
+#                 max_state = {state: {}}
+#             elif state_counts[state] == max_count:
+#                 max_state[state] = {}
 
-        # if no state is found
-        if max_state is None:
-            city_list.append(None)
-            state_list.append(None)
-            lat_list.append(None)
-            long_list.append(None)
-            continue
+#         # if no state is found
+#         if max_state is None:
+#             city_list.append(None)
+#             state_list.append(None)
+#             lat_list.append(None)
+#             long_list.append(None)
+#             continue
 
-        max_city = None
-        # get any cities in tokens based on states
-        for state in max_state:  # ideally this should only run once
-            city_counts = {}
-            for city in states_map[state]:
-                if c[city] > 0:
-                    city_counts[city] = c[city]
-            max_state[state] = city_counts
+#         max_city = None
+#         # get any cities in tokens based on states
+#         for state in max_state:  # ideally this should only run once
+#             city_counts = {}
+#             for city in states_map[state]:
+#                 if c[city] > 0:
+#                     city_counts[city] = c[city]
+#             max_state[state] = city_counts
 
-            # get the city/state combo that came back the most
-            max_count = 0
-            for city in city_counts:
-                if city_counts[city] > max_count:
-                    max_count = city_counts[city]
-                    max_city = (city, state)
+#             # get the city/state combo that came back the most
+#             max_count = 0
+#             for city in city_counts:
+#                 if city_counts[city] > max_count:
+#                     max_count = city_counts[city]
+#                     max_city = (city, state)
 
-        # if no city is found
-        if max_city is None:
-            city_list.append(None)
-            state_list.append(None)
-            lat_list.append(None)
-            long_list.append(None)
-            continue
+#         # if no city is found
+#         if max_city is None:
+#             city_list.append(None)
+#             state_list.append(None)
+#             lat_list.append(None)
+#             long_list.append(None)
+#             continue
 
-        # the city and state should be known now
+#         # the city and state should be known now
 
-        city_list.append(max_city[0].title())
-        state_list.append(max_city[1].title())
-        # now get the geolocation data
-        row = locs_df[(
-            (locs_df['city_ascii'] == max_city[0]) &
-            (locs_df['admin_name'] == max_city[1])
-        )]
-        row = row.reset_index()
-        if row.empty:
-            pass
-        else:
-            lat_list.append(row['lat'][0])
-            long_list.append(row['lng'][0])
+#         city_list.append(max_city[0].title())
+#         state_list.append(max_city[1].title())
+#         # now get the geolocation data
+#         row = locs_df[(
+#             (locs_df['city_ascii'] == max_city[0]) &
+#             (locs_df['admin_name'] == max_city[1])
+#         )]
+#         row = row.reset_index()
+#         if row.empty:
+#             pass
+#         else:
+#             lat_list.append(row['lat'][0])
+#             long_list.append(row['lng'][0])
 
-    # loop ends, add cities and states onto dataframe
-    df['city'] = city_list
-    df['state'] = state_list
-    df['lat'] = lat_list
-    df['long'] = long_list
+#     # loop ends, add cities and states onto dataframe
+#     df['city'] = city_list
+#     df['state'] = state_list
+#     df['lat'] = lat_list
+#     df['long'] = long_list
 
-    # drop any columns with null entries for location
-    df = df.dropna()
-    df = df.reset_index()
-    df = df.drop(columns='index')
+#     # drop any columns with null entries for location
+#     df = df.dropna()
+#     df = df.reset_index()
+#     df = df.drop(columns='index')
 
-    # cleanup to match 846 api
-    def listify(text):
-        return [text]
-    df['src'] = df['url'].apply(listify)
-    df['desc'] = df['text']
-    df = df.drop(columns=['tokens', 'text'])
-    df = df[[
-        'id', 'state', 'city',
-        'date', 'title', 'desc',
-        'src', 'lat', 'long'
-    ]]
+#     # cleanup to match 846 api
+#     def listify(text):
+#         return [text]
+#     df['src'] = df['url'].apply(listify)
+#     df['desc'] = df['text']
+#     df = df.drop(columns=['tokens', 'text'])
+#     df = df[[
+#         'id', 'state', 'city',
+#         'date', 'title', 'desc',
+#         'src', 'lat', 'long'
+#     ]]
 
-    # save the file to a local csv
-    df.to_csv(backlog_path, index=False, )
-    return HTTPException(
-        200,
-        "Backlog Updated at %s with %s entries" % (datetime.now(), df.shape[0])
-    )
+#     # save the file to a local csv
+#     df.to_csv(backlog_path, index=False, )
+#     return HTTPException(
+#         200,
+#         "Backlog Updated at %s with %s entries" % (datetime.now(), df.shape[0])
+#     )
 
 app.add_middleware(
     CORSMiddleware,
