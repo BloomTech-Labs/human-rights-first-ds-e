@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 try: # For deployment
     from app.api import getdata, predict#, viz  # These were not used in our product. Comment back in if/when used
 except: # For local environment
-    from app.api import getdata, predict#, viz  # These were not used in our product. Comment back in if/when used
+    from api import getdata, predict#, viz  # These were not used in our product. Comment back in if/when used
 
 # set up various things to be loaded outside of the function
 # pathway for geolocation data set up[]
